@@ -20,6 +20,7 @@ interface NotificationEventConfig {
 
 interface NotificationConfig {
   enabled: boolean;
+  itermIntegrationEnabled: boolean;
   events: {
     'session.idle': NotificationEventConfig;
     'permission.updated': NotificationEventConfig;
@@ -29,6 +30,7 @@ interface NotificationConfig {
 
 const DEFAULT_CONFIG: NotificationConfig = {
   enabled: true,
+  itermIntegrationEnabled: true,
   events: {
     'session.idle': {
       enabled: true,
@@ -72,6 +74,7 @@ function mergeConfig(
 ): NotificationConfig {
   return {
     enabled: user.enabled ?? defaults.enabled,
+    itermIntegrationEnabled: user.itermIntegrationEnabled ?? defaults.itermIntegrationEnabled,
     events: {
       'session.idle': {
         ...defaults.events['session.idle'],
@@ -96,6 +99,12 @@ function isITerm2(): boolean {
   return process.env.TERM_PROGRAM === 'iTerm.app';
 }
 
+interface NotifyOptions {
+  title: string;
+  message: string;
+  itermIntegrationEnabled: boolean;
+}
+
 /**
  * Send a notification using iTerm2 escape sequence (if available) and terminal bell
  *
@@ -106,10 +115,10 @@ function isITerm2(): boolean {
  * This triggers the terminal's bell behavior (sound, visual flash, or notification
  * depending on terminal settings).
  */
-function notify(title: string, message: string): void {
+function notify({ title, message, itermIntegrationEnabled }: NotifyOptions): void {
   const fullMessage = `${title} - ${message}`;
 
-  if (isITerm2()) {
+  if (itermIntegrationEnabled && isITerm2()) {
     // iTerm2 escape sequence for notifications
     // The \x07 at the end also triggers the bell
     process.stdout.write(`\x1b]9;${fullMessage}\x07`);
@@ -144,7 +153,11 @@ export const NotificationPlugin: Plugin = async ({ client, directory }) => {
             // Failed to fetch session, use default title
           }
 
-          notify('OpenCode', `${eventConfig.message}: ${title}`);
+          notify({
+            title: 'OpenCode',
+            message: `${eventConfig.message}: ${title}`,
+            itermIntegrationEnabled: config.itermIntegrationEnabled,
+          });
           break;
         }
 
@@ -153,7 +166,11 @@ export const NotificationPlugin: Plugin = async ({ client, directory }) => {
           if (!eventConfig?.enabled) return;
 
           const permissionTitle = (event.properties.title as string) ?? 'Unknown';
-          notify('OpenCode', `${eventConfig.message}: ${permissionTitle}`);
+          notify({
+            title: 'OpenCode',
+            message: `${eventConfig.message}: ${permissionTitle}`,
+            itermIntegrationEnabled: config.itermIntegrationEnabled,
+          });
           break;
         }
 
@@ -161,7 +178,11 @@ export const NotificationPlugin: Plugin = async ({ client, directory }) => {
           const eventConfig = config.events['session.error'];
           if (!eventConfig?.enabled) return;
 
-          notify('OpenCode', eventConfig.message);
+          notify({
+            title: 'OpenCode',
+            message: eventConfig.message,
+            itermIntegrationEnabled: config.itermIntegrationEnabled,
+          });
           break;
         }
       }

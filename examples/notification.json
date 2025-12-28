@@ -1,5 +1,6 @@
 {
   "enabled": true,
+  "itermIntegrationEnabled": true,
   "events": {
     "session.idle": {
       "enabled": true,
