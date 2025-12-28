@@ -39,13 +39,22 @@ Add to your global config at `~/.config/opencode/opencode.json`:
 }
 ```
 
-## Configuration (Optional)
+## Configuration
 
-Create `.opencode/notification.json` in your project to customize behavior:
+Configuration is loaded with the following precedence:
+
+1. **Project config**: `.opencode/notification.json` in your project
+2. **Global config**: `~/.config/opencode/notification.json`
+3. **Default config**
+
+A default global config file is automatically created on first run if it doesn't exist.
+
+### Example Configuration
 
 ```json
 {
   "enabled": true,
+  "itermIntegrationEnabled": true,
   "events": {
     "session.idle": {
       "enabled": true,
@@ -65,11 +74,12 @@ Create `.opencode/notification.json` in your project to customize behavior:
 
 ### Configuration Options
 
-| Option             | Type    | Default | Description                      |
-| ------------------ | ------- | ------- | -------------------------------- |
-| `enabled`          | boolean | `true`  | Enable/disable all notifications |
-| `events.*.enabled` | boolean | `true`  | Enable/disable specific event    |
-| `events.*.message` | string  | varies  | Custom message for the event     |
+| Option                    | Type    | Default | Description                                                         |
+| ------------------------- | ------- | ------- | ------------------------------------------------------------------- |
+| `enabled`                 | boolean | `true`  | Enable/disable all notifications                                    |
+| `itermIntegrationEnabled` | boolean | `true`  | Enable/disable iTerm2 escape sequences (use bell only when `false`) |
+| `events.*.enabled`        | boolean | `true`  | Enable/disable specific event                                       |
+| `events.*.message`        | string  | varies  | Custom message for the event                                        |
 
 ## How It Works
 

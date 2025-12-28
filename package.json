@@ -7,6 +7,14 @@
     "email": "netanel@example.com"
   },
   "type": "module",
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir dist --target bun",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "lint": "bunx eslint src/",
+    "format": "bunx prettier --write src/",
+    "typecheck": "bunx tsc --noEmit"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

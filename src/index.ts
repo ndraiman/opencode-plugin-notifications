@@ -9,9 +9,15 @@
  * Supports:
  * - iTerm2 escape sequences (shows native macOS notifications)
  * - Terminal bell (works on most terminals)
+ *
+ * Configuration is loaded with the following precedence:
+ * 1. Project config: {project}/.opencode/notification.json
+ * 2. Global config: ~/.config/opencode/notification.json
+ * 3. Default config
  */
 
-import type { Plugin } from '@opencode-ai/plugin';
+import type { Plugin, PluginInput } from '@opencode-ai/plugin';
+import { mkdir } from 'fs/promises';
 
 interface NotificationEventConfig {
   enabled: boolean;
@@ -48,21 +54,85 @@ const DEFAULT_CONFIG: NotificationConfig = {
 };
 
 /**
- * Load notification config from .opencode/notification.json
- * Falls back to default config if file doesn't exist or is invalid
+ * Load config from a file path if it exists
+ * Returns undefined if the file doesn't exist or is invalid
  */
-async function loadConfig(directory: string): Promise<NotificationConfig> {
-  const configPath = `${directory}/.opencode/notification.json`;
+async function loadConfigFile(
+  configPath: string
+): Promise<Partial<NotificationConfig> | undefined> {
   try {
     const file = Bun.file(configPath);
     if (await file.exists()) {
-      const userConfig = (await file.json()) as Partial<NotificationConfig>;
-      return mergeConfig(DEFAULT_CONFIG, userConfig);
+      return (await file.json()) as Partial<NotificationConfig>;
     }
   } catch {
-    // Config file doesn't exist or is invalid, use defaults
+    // Config file doesn't exist or is invalid
   }
-  return DEFAULT_CONFIG;
+  return undefined;
+}
+
+/**
+ * Get the global config directory path from OpenCode SDK
+ */
+async function getGlobalConfigDir(client: PluginInput['client']): Promise<string> {
+  const pathInfo = await client.path.get();
+  return pathInfo.data?.config ?? '';
+}
+
+/**
+ * Ensure the global config file exists, creating it with defaults if missing
+ */
+async function ensureGlobalConfig(client: PluginInput['client']): Promise<void> {
+  const globalConfigDir = await getGlobalConfigDir(client);
+  if (!globalConfigDir) return;
+
+  const globalConfigPath = `${globalConfigDir}/notification.json`;
+
+  try {
+    const file = Bun.file(globalConfigPath);
+    if (await file.exists()) return;
+
+    // Create parent directory if needed
+    await mkdir(globalConfigDir, { recursive: true });
+
+    // Write default config
+    await Bun.write(globalConfigPath, JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n');
+  } catch {
+    // Failed to create config, continue with defaults
+  }
+}
+
+interface LoadConfigOptions {
+  client: PluginInput['client'];
+  directory: string;
+}
+
+/**
+ * Load notification config with the following precedence:
+ * 1. Project config: {directory}/.opencode/notification.json
+ * 2. Global config: ~/.config/opencode/notification.json
+ * 3. Default config
+ *
+ * Project config values override global config values
+ */
+async function loadConfig({ client, directory }: LoadConfigOptions): Promise<NotificationConfig> {
+  const globalConfigDir = await getGlobalConfigDir(client);
+  const globalConfigPath = globalConfigDir ? `${globalConfigDir}/notification.json` : '';
+  const projectConfigPath = `${directory}/.opencode/notification.json`;
+
+  const globalConfig = globalConfigPath ? await loadConfigFile(globalConfigPath) : undefined;
+  const projectConfig = await loadConfigFile(projectConfigPath);
+
+  // Merge: defaults <- global <- project
+  let config = DEFAULT_CONFIG;
+  if (globalConfig) {
+    config = mergeConfig(config, globalConfig);
+  }
+  if (projectConfig) {
+    config = mergeConfig(config, projectConfig);
+  }
+
+  return config;
 }
 
 /**
@@ -128,8 +198,22 @@ function notify({ title, message, itermIntegrationEnabled }: NotifyOptions): voi
   }
 }
 
+// Export for testing
+export {
+  DEFAULT_CONFIG,
+  loadConfigFile,
+  mergeConfig,
+  isITerm2,
+  notify,
+  ensureGlobalConfig,
+  loadConfig,
+  getGlobalConfigDir,
+};
+export type { NotificationConfig, NotificationEventConfig, NotifyOptions, LoadConfigOptions };
+
 export const NotificationPlugin: Plugin = async ({ client, directory }) => {
-  const config = await loadConfig(directory);
+  await ensureGlobalConfig(client);
+  const config = await loadConfig({ client, directory });
 
   return {
     event: async ({ event }) => {
