@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "events": {
+    "session.idle": {
+      "enabled": true,
+      "message": "Session completed"
+    },
+    "permission.updated": {
+      "enabled": true,
+      "message": "Permission needed"
+    },
+    "session.error": {
+      "enabled": true,
+      "message": "Error occurred"
+    }
+  }
+}

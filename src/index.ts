@@ -1,143 +1,169 @@
 /**
- * OpenCode Plugin Template
+ * OpenCode Notification Plugin
  *
- * This is an example plugin that demonstrates the plugin capabilities:
- * - Custom tools (tools callable by the LLM)
- * - Custom slash commands (user-invokable /commands loaded from .md files)
- * - Config hooks (modify config at runtime)
+ * Sends terminal notifications when OpenCode events occur:
+ * - session.idle: Session completed
+ * - permission.updated: Permission needed
+ * - session.error: An error occurred
  *
- * Replace this with your own plugin implementation.
+ * Supports:
+ * - iTerm2 escape sequences (shows native macOS notifications)
+ * - Terminal bell (works on most terminals)
  */
 
 import type { Plugin } from '@opencode-ai/plugin';
-import { tool } from '@opencode-ai/plugin';
-import path from 'path';
 
-// ============================================================
-// COMMAND LOADER
-// Loads .md files from src/command/ directory as slash commands
-// ============================================================
-
-interface CommandFrontmatter {
-  description?: string;
-  agent?: string;
-  model?: string;
-  subtask?: boolean;
+interface NotificationEventConfig {
+  enabled: boolean;
+  message: string;
 }
 
-interface ParsedCommand {
-  name: string;
-  frontmatter: CommandFrontmatter;
-  template: string;
+interface NotificationConfig {
+  enabled: boolean;
+  events: {
+    'session.idle': NotificationEventConfig;
+    'permission.updated': NotificationEventConfig;
+    'session.error': NotificationEventConfig;
+  };
+}
+
+const DEFAULT_CONFIG: NotificationConfig = {
+  enabled: true,
+  events: {
+    'session.idle': {
+      enabled: true,
+      message: 'Session completed',
+    },
+    'permission.updated': {
+      enabled: true,
+      message: 'Permission needed',
+    },
+    'session.error': {
+      enabled: true,
+      message: 'Error occurred',
+    },
+  },
+};
+
+/**
+ * Load notification config from .opencode/notification.json
+ * Falls back to default config if file doesn't exist or is invalid
+ */
+async function loadConfig(directory: string): Promise<NotificationConfig> {
+  const configPath = `${directory}/.opencode/notification.json`;
+  try {
+    const file = Bun.file(configPath);
+    if (await file.exists()) {
+      const userConfig = (await file.json()) as Partial<NotificationConfig>;
+      return mergeConfig(DEFAULT_CONFIG, userConfig);
+    }
+  } catch {
+    // Config file doesn't exist or is invalid, use defaults
+  }
+  return DEFAULT_CONFIG;
 }
 
 /**
- * Parse YAML frontmatter from a markdown file
- * Format:
- * ---
- * description: Command description
- * agent: optional-agent
- * ---
- * Template content here
+ * Deep merge user config with defaults
  */
-function parseFrontmatter(content: string): { frontmatter: CommandFrontmatter; body: string } {
-  const frontmatterRegex = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/;
-  const match = content.match(frontmatterRegex);
-
-  if (!match) {
-    return { frontmatter: {}, body: content.trim() };
-  }
-
-  const [, yamlContent, body] = match;
-  const frontmatter: CommandFrontmatter = {};
-
-  // Simple YAML parsing for key: value pairs
-  for (const line of yamlContent.split('\n')) {
-    const colonIndex = line.indexOf(':');
-    if (colonIndex === -1) continue;
-
-    const key = line.slice(0, colonIndex).trim();
-    const value = line.slice(colonIndex + 1).trim();
-
-    if (key === 'description') frontmatter.description = value;
-    if (key === 'agent') frontmatter.agent = value;
-    if (key === 'model') frontmatter.model = value;
-    if (key === 'subtask') frontmatter.subtask = value === 'true';
-  }
-
-  return { frontmatter, body: body.trim() };
+function mergeConfig(
+  defaults: NotificationConfig,
+  user: Partial<NotificationConfig>
+): NotificationConfig {
+  return {
+    enabled: user.enabled ?? defaults.enabled,
+    events: {
+      'session.idle': {
+        ...defaults.events['session.idle'],
+        ...user.events?.['session.idle'],
+      },
+      'permission.updated': {
+        ...defaults.events['permission.updated'],
+        ...user.events?.['permission.updated'],
+      },
+      'session.error': {
+        ...defaults.events['session.error'],
+        ...user.events?.['session.error'],
+      },
+    },
+  };
 }
 
 /**
- * Load all command .md files from the command directory
+ * Detect if running in iTerm2
  */
-async function loadCommands(): Promise<ParsedCommand[]> {
-  const commands: ParsedCommand[] = [];
-  const commandDir = path.join(import.meta.dir, 'command');
-  const glob = new Bun.Glob('**/*.md');
-
-  for await (const file of glob.scan({ cwd: commandDir, absolute: true })) {
-    const content = await Bun.file(file).text();
-    const { frontmatter, body } = parseFrontmatter(content);
-
-    // Extract command name from filename (e.g., "hello.md" -> "hello")
-    const relativePath = path.relative(commandDir, file);
-    const name = relativePath.replace(/\.md$/, '').replace(/\//g, '-');
-
-    commands.push({
-      name,
-      frontmatter,
-      template: body,
-    });
-  }
-
-  return commands;
+function isITerm2(): boolean {
+  return process.env.TERM_PROGRAM === 'iTerm.app';
 }
 
-export const ExamplePlugin: Plugin = async () => {
-  // ============================================================
-  // LOAD COMMANDS FROM .MD FILES
-  // Commands are loaded at plugin initialization time
-  // ============================================================
-  const commands = await loadCommands();
+/**
+ * Send a notification using iTerm2 escape sequence (if available) and terminal bell
+ *
+ * iTerm2 escape sequence format: \x1b]9;message\x07
+ * This triggers a native macOS notification when iTerm2 is configured to show them.
+ *
+ * Terminal bell: \x07
+ * This triggers the terminal's bell behavior (sound, visual flash, or notification
+ * depending on terminal settings).
+ */
+function notify(title: string, message: string): void {
+  const fullMessage = `${title} - ${message}`;
 
-  // ============================================================
-  // EXAMPLE TOOL
-  // Tools are callable by the LLM during conversations
-  // ============================================================
-  const exampleTool = tool({
-    description: 'An example tool that echoes back the input message',
-    args: {
-      message: tool.schema.string().describe('The message to echo'),
-    },
-    async execute(args) {
-      return `Echo: ${args.message}`;
-    },
-  });
+  if (isITerm2()) {
+    // iTerm2 escape sequence for notifications
+    // The \x07 at the end also triggers the bell
+    process.stdout.write(`\x1b]9;${fullMessage}\x07`);
+  } else {
+    // Just the bell for other terminals
+    process.stdout.write('\x07');
+  }
+}
+
+export const NotificationPlugin: Plugin = async ({ client, directory }) => {
+  const config = await loadConfig(directory);
 
   return {
-    // Register custom tools
-    tool: {
-      example_tool: exampleTool,
-    },
+    event: async ({ event }) => {
+      if (!config.enabled) return;
 
-    // ============================================================
-    // CONFIG HOOK
-    // Modify config at runtime - use this to inject custom commands
-    // ============================================================
-    async config(config) {
-      // Initialize the command record if it doesn't exist
-      config.command = config.command ?? {};
+      switch (event.type) {
+        case 'session.idle': {
+          const eventConfig = config.events['session.idle'];
+          if (!eventConfig?.enabled) return;
 
-      // Register all loaded commands
-      for (const cmd of commands) {
-        config.command[cmd.name] = {
-          template: cmd.template,
-          description: cmd.frontmatter.description,
-          agent: cmd.frontmatter.agent,
-          model: cmd.frontmatter.model,
-          subtask: cmd.frontmatter.subtask,
-        };
+          // Fetch session info to get the title
+          const sessionID = event.properties.sessionID as string;
+          let title = 'Session';
+
+          try {
+            const response = await client.session.get({ path: { id: sessionID } });
+            if (response.data?.title) {
+              title = response.data.title;
+            }
+          } catch {
+            // Failed to fetch session, use default title
+          }
+
+          notify('OpenCode', `${eventConfig.message}: ${title}`);
+          break;
+        }
+
+        case 'permission.updated': {
+          const eventConfig = config.events['permission.updated'];
+          if (!eventConfig?.enabled) return;
+
+          const permissionTitle = (event.properties.title as string) ?? 'Unknown';
+          notify('OpenCode', `${eventConfig.message}: ${permissionTitle}`);
+          break;
+        }
+
+        case 'session.error': {
+          const eventConfig = config.events['session.error'];
+          if (!eventConfig?.enabled) return;
+
+          notify('OpenCode', eventConfig.message);
+          break;
+        }
       }
     },
   };

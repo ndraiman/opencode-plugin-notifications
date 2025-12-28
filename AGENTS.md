@@ -1,65 +1,58 @@
 # AGENTS.md
 
+## Project Overview
+
+This is the **opencode-plugin-notification** plugin for OpenCode. It sends terminal notifications when specific events occur:
+
+- `session.idle` - Session completed
+- `permission.updated` - Permission needed
+- `session.error` - An error occurred
+
+### Notification Methods
+
+1. **iTerm2 escape sequences** (`\x1b]9;message\x07`) - Shows native macOS notifications in iTerm2
+2. **Terminal bell** (`\x07`) - Works on any terminal
+
 ## Build & Test Commands
 
-- **Build**: `mise run build` or `bun build ./src/index.ts --outdir dist --target bun`
-- **Test**: `mise run test` or `bun test`
-- **Single Test**: `bun test BackgroundTask.test.ts` (use file glob pattern)
-- **Watch Mode**: `bun test --watch`
-- **Lint**: `mise run lint` (eslint)
-- **Fix Lint**: `mise run lint:fix` (eslint --fix)
-- **Format**: `mise run format` (prettier)
+- **Build**: `bun build ./src/index.ts --outdir dist --target bun`
+- **Test**: `bun test`
+- **Lint**: `bunx eslint src/`
+- **Type check**: `bunx tsc --noEmit`
+- **Format**: `bunx prettier --write src/`
 
 ## Code Style Guidelines
 
 ### Imports & Module System
 
 - Use ES6 `import`/`export` syntax (module: "ESNext", type: "module")
-- Group imports: external libraries first, then internal modules
-- Use explicit file extensions (`.ts`) for internal imports
+- Use `@opencode-ai/plugin` for plugin types
 
 ### Formatting (Prettier)
 
 - **Single quotes** (`singleQuote: true`)
 - **Line width**: 100 characters
 - **Tab width**: 2 spaces
-- **Trailing commas**: ES5 (no trailing commas in function parameters)
 - **Semicolons**: enabled
 
 ### TypeScript & Naming
 
-- **NeverNesters**: avoid deeply nested structures. Always exit early.
 - **Strict mode**: enforced (`"strict": true`)
-- **Classes**: PascalCase (e.g., `BackgroundTask`, `BackgroundTaskManager`)
-- **Methods/properties**: camelCase
-- **Status strings**: use union types (e.g., `'pending' | 'running' | 'completed' | 'failed' | 'cancelled'`)
-- **Explicit types**: prefer explicit type annotations over inference
-- **Return types**: optional (not required but recommended for public methods)
+- **Interfaces**: PascalCase (e.g., `NotificationConfig`)
+- **Functions**: camelCase (e.g., `loadConfig`, `notify`)
+- **Explicit types**: prefer explicit type annotations
 
 ### Error Handling
 
-- Check error type before accessing error properties: `error instanceof Error ? error.toString() : String(error)`
-- Log errors with `[ERROR]` prefix for consistency
-- Always provide error context when recording output
+- Use try/catch with empty catch blocks for optional operations (like loading config)
+- Always provide fallback values
 
-### Linting Rules
+## Key Files
 
-- `@typescript-eslint/no-explicit-any`: warn (avoid `any` type)
-- `no-console`: error (minimize console logs)
-- `prettier/prettier`: error (formatting violations are errors)
+- `src/index.ts` - Main plugin implementation
+- `examples/notification.json` - Example configuration file
+- `package.json` - Dependencies and metadata
 
-## Testing
+## Configuration
 
-- Framework: **vitest** with `describe` & `it` blocks
-- Style: Descriptive nested test cases with clear expectations
-- Assertion library: `expect()` (vitest)
-
-## Memory
-
-- Store temporary data in `.memory/` directory (gitignored)
-
-## Project Context
-
-- **Type**: ES Module package for OpenCode plugin system
-- **Target**: Bun runtime, ES2021+
-- **Purpose**: Background task execution and lifecycle management
+Users can create `.opencode/notification.json` to customize behavior. If no config exists, defaults are used (all events enabled).
