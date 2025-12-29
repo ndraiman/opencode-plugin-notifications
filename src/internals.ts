@@ -3,8 +3,8 @@
  * Exported separately for testing purposes.
  */
 
-import type { PluginInput } from '@opencode-ai/plugin';
 import { mkdir } from 'fs/promises';
+import { homedir } from 'os';
 
 export interface NotificationEventConfig {
   enabled: boolean;
@@ -59,20 +59,18 @@ export async function loadConfigFile(
 }
 
 /**
- * Get the global config directory path from OpenCode SDK
+ * Get the global config directory path
+ * Uses ~/.config/opencode as the standard location
  */
-export async function getGlobalConfigDir(client: PluginInput['client']): Promise<string> {
-  const pathInfo = await client.path.get();
-  return pathInfo.data?.config ?? '';
+export function getGlobalConfigDir(): string {
+  return `${homedir()}/.config/opencode`;
 }
 
 /**
  * Ensure the global config file exists, creating it with defaults if missing
  */
-export async function ensureGlobalConfig(client: PluginInput['client']): Promise<void> {
-  const globalConfigDir = await getGlobalConfigDir(client);
-  if (!globalConfigDir) return;
-
+export async function ensureGlobalConfig(): Promise<void> {
+  const globalConfigDir = getGlobalConfigDir();
   const globalConfigPath = `${globalConfigDir}/notification.json`;
 
   try {
@@ -90,7 +88,6 @@ export async function ensureGlobalConfig(client: PluginInput['client']): Promise
 }
 
 export interface LoadConfigOptions {
-  client: PluginInput['client'];
   directory: string;
 }
 
@@ -102,12 +99,8 @@ export interface LoadConfigOptions {
  *
  * Project config values override global config values
  */
-export async function loadConfig({
-  client,
-  directory,
-}: LoadConfigOptions): Promise<NotificationConfig> {
-  const globalConfigDir = await getGlobalConfigDir(client);
-  const globalConfigPath = globalConfigDir ? `${globalConfigDir}/notification.json` : '';
+export async function loadConfig({ directory }: LoadConfigOptions): Promise<NotificationConfig> {
+  const globalConfigPath = `${getGlobalConfigDir()}/notification.json`;
   const projectConfigPath = `${directory}/.opencode/notification.json`;
 
   const globalConfig = globalConfigPath ? await loadConfigFile(globalConfigPath) : undefined;

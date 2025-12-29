@@ -20,8 +20,8 @@ import type { Plugin } from '@opencode-ai/plugin';
 import { ensureGlobalConfig, loadConfig, notify } from './internals';
 
 export const NotificationPlugin: Plugin = async ({ client, directory }) => {
-  await ensureGlobalConfig(client);
-  const config = await loadConfig({ client, directory });
+  await ensureGlobalConfig();
+  const config = await loadConfig({ directory });
 
   return {
     event: async ({ event }) => {
