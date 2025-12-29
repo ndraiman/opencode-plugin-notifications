@@ -11,9 +11,9 @@ import {
   ensureGlobalConfig,
   loadConfig,
   getGlobalConfigDir,
-  NotificationPlugin,
   type NotificationConfig,
-} from './index';
+} from './internals';
+import { NotificationPlugin } from './index';
 
 describe('DEFAULT_CONFIG', () => {
   it('should have all required properties with correct structure', () => {
