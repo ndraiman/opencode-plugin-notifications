@@ -22,6 +22,7 @@ export default tseslint.config(
         console: 'readonly',
         process: 'readonly',
         Buffer: 'readonly',
+        URL: 'readonly',
         // Bun globals
         Bun: 'readonly',
       },
