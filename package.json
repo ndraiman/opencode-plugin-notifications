@@ -1,6 +1,6 @@
 {
   "name": "opencode-plugin-notification",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Terminal notifications for OpenCode using iTerm2 escape sequences and terminal bell",
   "author": {
     "name": "Netanel",
